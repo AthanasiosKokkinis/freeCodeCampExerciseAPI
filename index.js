@@ -103,47 +103,44 @@ app.post("/api/users/:_id/exercises", async (req,res) =>
   }
 });
 
-app.get("/api/users/:_id/logs", async (req,res) =>
-{
-  const {from, to, limit} = req.query;
-  const id = req.params._id;
-  const user = await User.findById(id);
-  if(!user)
-  {
-    return res.send("User not found");
-  }
-  let dateObj = {};
-  if (from)
-  {
-    dateObj["$gte"] = new Date(from);
-  }
-  if (to)
-  {
-    dateObj["$lte"] = new Date(to);
-  }
-  let filter = {
-    user_id: id
-  }
-  if(from || to)
-  {
-    filter.date = dateObj;
-  }
-  const exercise = await Exercise.find(filter).limit(+limit ?? 500);
-  
-  const logs = exercise.map(e =>(
-    {
-      description: e.description,
-      duration: e.duration,
-      date: e.date.toDateString()
+app.get("/api/users/:id/logs", async (req,res) => {
+  try {
+    const id = req.params.id;
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    let { from, to, limit } = req.query;
+    from = from ? new Date(from) : null;
+    to = to ? new Date(to) : null;
+    limit = limit ? parseInt(limit) : 0;
+
+    const query = { user_id: id };
+    if (from || to) {
+      query.date = {};
+      if (from) query.date["$gte"] = from;
+      if (to) query.date["$lte"] = to;
+    }
+
+    let logs = await Exercise.find(query).limit(limit).lean();
+
+    logs = logs.map(log => ({
+      description: log.description,
+      duration: log.duration,
+      date: new Date(log.date).toDateString()
     }));
 
-  res.json({
-    username: user.username,
-    count: exercise.length,
-    _id: user._id,
-    logs
-  });
-
+    res.json({
+      _id: user._id,
+      username: user.username,
+      count: logs.length,
+      log: logs
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
 });
 
 const listener = app.listen(process.env.PORT || 3000, () => {
